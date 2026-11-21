@@ -131,8 +131,11 @@ body{margin:0}
 .card .face img{width:100%;height:100%;display:block;max-width:none}
 .card .front{transform:rotateY(180deg)}
 .card.glow .front{box-shadow:0 0 0 1px var(--gold),0 0 22px rgba(255,200,120,.55)}
-.hand{position:absolute;left:0;top:0;z-index:600;pointer-events:none;transform-origin:50% 77%;will-change:transform;filter:drop-shadow(0 8px 10px rgba(0,0,0,.45))}
-.hand svg{width:100%;height:100%;display:block;overflow:visible}
+.hand{position:absolute;left:0;top:0;z-index:600;pointer-events:none;transform-origin:50% 77%;will-change:transform}
+.hand svg{position:relative;width:100%;height:100%;display:block;filter:drop-shadow(0 8px 10px rgba(0,0,0,.45))}
+/* 袖: 手の枠の上に別要素として伸ばし、毎フレーム肩まで届く長さにする */
+.hand .sleeve{position:absolute;left:8%;width:84%;bottom:100%;height:0;
+  background:linear-gradient(90deg,#2a1a45 0 14.3%,#3a2659 14.3% 26.2%,#2a1a45 26.2% 73.8%,#3a2659 73.8% 85.7%,#2a1a45 85.7%)}
 .hand.mirror svg{transform:scaleX(-1)}
 .slot{position:absolute;left:0;top:0;border:1px dashed rgba(214,179,106,.45);border-radius:7%/4.2%;pointer-events:none}
 .slot-label{position:absolute;left:0;top:0;text-align:center;pointer-events:none;font-size:12px;line-height:1.35;color:var(--muted)}
@@ -170,7 +173,8 @@ body{margin:0}
 .summary p{margin:0 0 8px;color:var(--parch);line-height:1.85}
 .summary p:last-child{margin-bottom:0}
 .note{font-size:12px;color:var(--muted);text-align:center;margin:0}
-.saved{font-size:12px;color:var(--gold);text-align:center;margin:-8px 0 0}
+.save-box{display:flex;flex-direction:column;gap:8px}
+#res-save[disabled]{opacity:1;background:transparent;color:var(--gold);border-color:var(--gold);box-shadow:none}
 
 /* guide */
 .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px 10px}
@@ -564,8 +568,8 @@ const Snd = {
   },
   tap(){ this.noiseHit({dur:.09, type:'lowpass', f:700, q:.5, vol:.35, attack:.004}); },
   riffle(){ for(let i=0;i<14;i++) setTimeout(()=>this.noiseHit({dur:.03, type:'highpass', f:2800+Math.random()*1200, q:.4, vol:.06, attack:.002}), i*(22+Math.random()*14)); },
-  place(){ this.play('place', {vol:1}); },
-  flip(){ this.play('flip', {vol:1}); },
+  place(){ this.play('place', {vol:.5}); },
+  flip(){ this.play('flip', {vol:.5}); },
   reveal(){ if(!this.ctx||!this.on) return; [76,79,83,88].forEach((m,i)=>setTimeout(()=>this.bell(m,.05,this.sfxBus), i*160)); },
   toggle(){
     this.on = !this.on; store.set('sound', this.on); updateSoundBtn();
@@ -638,8 +642,8 @@ function frame(now){
 const R = { active:false, token:0, cards:[], hands:[], deck:[], drawn:[], W:70, H:117, tw:300, th:400, waitTap:null, auto:false };
 const table = $('#table');
 const HAND_SVG = `<svg viewBox="0 0 100 320" aria-hidden="true">
-  <path d="M4 -1600H96L85 204Q50 216 15 204Z" fill="#2a1a45"/>
-  <path d="M20 -1600H31L28 200H22ZM69 -1600H80L78 200H72Z" fill="#3a2659"/>
+  <path d="M8 0H92L85 204Q50 216 15 204Z" fill="#2a1a45"/>
+  <path d="M20 0H30L28 200H22ZM70 0H80L78 200H72Z" fill="#3a2659"/>
   <path d="M13 194Q50 207 87 194L85 214Q50 227 15 214Z" fill="#c9a35a"/>
   <path d="M15 208Q50 220 85 208" stroke="#8c7444" stroke-width="1.5" fill="none"/>
   <g fill="#e8c6a2" stroke="#b98d6c" stroke-width="1.3">
@@ -680,6 +684,8 @@ function render(){
   R.hands.forEach((h,i) => {
     const sh=R.shoulders[i], ang=Math.atan2(sh.x-h.x, -(sh.y-h.y));
     h.el.style.transform=`translate3d(${cx+h.x-R.hw/2}px,${cy+h.y-R.hh*.77}px,0) rotate(${ang}rad)`;
+    const len = Math.max(0, Math.round(Math.hypot(sh.x-h.x, sh.y-h.y) - R.hh*.77 + 80));
+    if(h.len !== len){ h.len = len; h.sl.style.height = len+'px'; }
   });
 }
 
@@ -721,7 +727,7 @@ function startRitual(){
     table.appendChild(el);
     return { i, el, x:(rand()-.5)*2, y:(rand()-.5)*2, r:(rand()-.5)*4, s:1, z:rand()*22, r0:0 };
   });
-  R.hands = [0,1].map(i => { const el=document.createElement('div'); el.className='hand'+(i===1?' mirror':''); el.innerHTML=HAND_SVG; table.appendChild(el); return {el,x:0,y:0}; });
+  R.hands = [0,1].map(i => { const el=document.createElement('div'); el.className='hand'+(i===1?' mirror':''); el.innerHTML='<div class="sleeve"></div>'+HAND_SVG; table.appendChild(el); return {el, sl:el.firstChild, x:0, y:0, len:-1}; });
   measure();
   R.hands.forEach((h,i) => { h.x = R.rest[i].x*1.1; h.y = -R.th*.5 - R.hh*.3; });
   R.cards.forEach(c => { c.x += R.deckPos.x*0; c.y += 0; });
@@ -758,14 +764,15 @@ async function wash(tk){
   }));
   if(!alive(tk)) return;
   const st={t:0, dur:5200, sw:0, zt:0}; let maxZ=40;
-  await Promise.all([handTo(0, -RAD*.45, 0, 500), handTo(1, RAD*.45, 0, 500)]);
+  await Promise.all([handTo(0, -RAD*.15, 0, 500), handTo(1, RAD*.15, 0, 500)]);
   if(!alive(tk)) return;
   await new Promise(res => {
     const up = dt => {
       st.t += dt; const env = Math.max(0, Math.min(1, st.t/700, (st.dur-st.t)/700));
-      const ha = st.t*.0026;
-      R.hands[0].x = Math.cos(ha+Math.PI)*RAD*.45; R.hands[0].y = Math.sin(ha+Math.PI)*RAD*.42;
-      R.hands[1].x = Math.cos(ha)*RAD*.45;         R.hands[1].y = Math.sin(ha)*RAD*.42;
+      // 左右の手はそれぞれ自分の側で円を描く(腕が交差しないように)
+      const ha = st.t*.0042;
+      R.hands[0].x = -RAD*.45 + Math.cos(-ha)*RAD*.3;  R.hands[0].y = Math.sin(-ha)*RAD*.34;
+      R.hands[1].x =  RAD*.45 + Math.cos(ha+Math.PI)*RAD*.3; R.hands[1].y = Math.sin(ha+Math.PI)*RAD*.34;
       for(const c of R.cards){
         c.a += dt*.0021*env*(1.25 - c.rad/RAD*.55);
         c.rad += Math.sin(st.t*.0017 + c.ph)*.22*env*(dt/16);
@@ -836,7 +843,6 @@ async function drawAll(tk){
   T.speed = 1;
   await say(n===3 ? `カードが揃いました。${callName(sel.name)}の物語を、読み解いていきましょう。` : 'あなたの今日を照らす一枚です。読み解いていきましょう。', tk);
   const reading = { id: Date.now().toString(36)+Math.floor(rand()*1e4), ts: Date.now(), mode: sel.mode, name: sel.name, theme: sel.theme, cards: R.drawn.map(c => ({i:c.i, rev:c.rev})) };
-  saveReading(reading);
   Snd.reveal();
   $('#btn-skip').hidden = true;
   setAction('結果を見る', true, () => { renderResult(reading, false); show('result'); });
@@ -898,18 +904,29 @@ function renderResult(rd, fromHistory){
   }).join('');
   $('#s-result').innerHTML = `
     <div class="res-head"><p class="eyebrow">Reading</p><h2>${th.l}</h2><div class="res-meta">${who}<br>${fmtDate(rd.ts)}</div></div>
-    ${fromHistory ? '' : '<p class="saved">この結果は「過去の結果」に保存しました</p>'}
     ${cards}
     <section class="summary"><h3>${rd.mode===3?'総合メッセージ':'今日のひとこと'}</h3>${summaryHTML(rd)}</section>
     ${rd.theme==='health' ? '<p class="note">健康の占いは心がけのヒントです。気になる症状があるときは医療機関に相談してください。</p>' : ''}
+    ${fromHistory ? '' : `<div class="save-box">
+      <button class="btn primary" id="res-save">この結果を保存する</button>
+      <p class="note" id="res-save-note">保存しない場合、この結果は「過去の結果」に残りません</p>
+    </div>`}
     <div class="stack">
-      ${fromHistory ? '<button class="btn" id="res-back">過去の結果に戻る</button>' : '<button class="btn primary" id="res-again">もう一度占う</button>'}
+      ${fromHistory ? '<button class="btn" id="res-back">過去の結果に戻る</button>' : '<button class="btn" id="res-again">もう一度占う</button>'}
       <button class="btn ghost" id="res-top">トップへ</button>
     </div>
     <p class="note">タロットの意味はライダー・ウェイト版に基づいています。占いは楽しみとしてお使いください。</p>`;
   $('#res-top').onclick = () => show('title');
   if(fromHistory) $('#res-back').onclick = () => { renderHistory(); show('history'); };
-  else $('#res-again').onclick = () => show('mode');
+  else {
+    $('#res-again').onclick = () => show('mode');
+    // 保存ボタンを押したときだけ「過去の結果」に残す(二重保存しない)
+    $('#res-save').onclick = () => {
+      if(!loadHist().some(r => r.id===rd.id)) saveReading(rd);
+      const b=$('#res-save'); b.disabled=true; b.textContent='保存しました';
+      $('#res-save-note').textContent='「過去の結果」からいつでも見返せます';
+    };
+  }
   if(fromHistory) backTarget = 'history';
 }
 
