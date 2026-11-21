@@ -737,7 +737,8 @@ function startRitual(){
   ritual(tk).catch(()=>{});
 }
 
-$('#btn-skip').addEventListener('click', () => { T.speed = 5; R.auto = true; if(R.waitTap){ const f=R.waitTap; R.waitTap=null; f(); } $('#btn-skip').hidden=true; });
+// 早送り: カードを混ぜる・カットする演出だけを速くする。カードを引く場面で通常速度に戻り、引くのは自分でタップする
+$('#btn-skip').addEventListener('click', () => { T.speed = 5; $('#btn-skip').hidden=true; });
 
 async function ritual(tk){
   const name = callName(sel.name), th = THEMES[sel.theme].l;
@@ -825,6 +826,8 @@ async function cut(tk){
 /* 9. 山の上から1枚ずつ引き、向きを変えずに左右にめくって置く */
 async function drawAll(tk){
   const n = POS[sel.mode].length;
+  if(!R.auto) T.speed = 1; // 早送りはここで終わり
+  $('#btn-skip').hidden = true;
   await say(n===3 ? 'では、山の上から一枚ずつ引いていきます。準備ができたら、山に触れてください。' : 'では、山の上から一枚を引きます。準備ができたら、山に触れてください。', tk);
   for(let i=0;i<n;i++){
     if(!alive(tk)) return;
@@ -913,7 +916,7 @@ function renderResult(rd, fromHistory){
     </div>`}
     <div class="stack">
       ${fromHistory ? '<button class="btn" id="res-back">過去の結果に戻る</button>' : '<button class="btn" id="res-again">もう一度占う</button>'}
-      <button class="btn ghost" id="res-top">トップへ</button>
+      <button class="btn" id="res-top">トップへ</button>
     </div>
     <p class="note">タロットの意味はライダー・ウェイト版に基づいています。占いは楽しみとしてお使いください。</p>`;
   $('#res-top').onclick = () => show('title');
